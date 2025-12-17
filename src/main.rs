@@ -12,9 +12,11 @@ const DEFAULT_WORK_MINUTES: u64 = 25;
 const DEFAULT_BREAK_MINUTES: u64 = 5;
 const MAX_MINUTES: u64 = 24 * 60;
 const MAX_SETS: u64 = 100;
+const STATE_DIR: &str = env!("CARGO_PKG_NAME");
+const LEGACY_STATE_DIR: &str = "pomo";
 
 #[derive(Parser, Debug)]
-#[command(name = "pomo", version, about = "Ultra-low resource Pomodoro timer (macOS)")]
+#[command(version, about = "Ultra-low resource Pomodoro timer (macOS)")]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -204,7 +206,8 @@ fn start_single_session(mode: Mode, minutes: Option<u64>) -> Result<(), String> 
 }
 
 fn start_session(mode: Mode, minutes: u64, cycle: Option<Cycle>) -> Result<(), String> {
-    let state_path = state_path()?;
+    let (state_path, legacy_state_path) = state_paths()?;
+    stop_existing(&legacy_state_path)?;
     stop_existing(&state_path)?;
 
     let start_ts = now_unix();
@@ -299,10 +302,16 @@ fn start_session(mode: Mode, minutes: u64, cycle: Option<Cycle>) -> Result<(), S
 }
 
 fn status() -> Result<i32, String> {
-    let state_path = state_path()?;
-    let Some(state) = read_state(&state_path)? else {
-        println!("not running");
-        return Ok(1);
+    let (primary_state_path, legacy_state_path) = state_paths()?;
+    let (state_path, state) = match read_state(&primary_state_path)? {
+        Some(state) => (primary_state_path, state),
+        None => match read_state(&legacy_state_path)? {
+            Some(state) => (legacy_state_path, state),
+            None => {
+                println!("not running");
+                return Ok(1);
+            }
+        },
     };
 
     if !pid_alive(state.pid)? {
@@ -327,22 +336,28 @@ fn status() -> Result<i32, String> {
 }
 
 fn stop() -> Result<i32, String> {
-    let state_path = state_path()?;
-    let Some(state) = read_state(&state_path)? else {
-        println!("not running");
-        return Ok(1);
-    };
+    let (primary_state_path, legacy_state_path) = state_paths()?;
+    let mut stopped = false;
 
-    if pid_alive(state.pid)? {
-        send_sigterm(state.pid)?;
-        clear_state(&state_path)?;
-        println!("stopped");
-        return Ok(0);
+    for state_path in [&primary_state_path, &legacy_state_path] {
+        let Some(state) = read_state(state_path)? else {
+            continue;
+        };
+
+        if pid_alive(state.pid)? {
+            send_sigterm(state.pid)?;
+            stopped = true;
+        }
+        clear_state(state_path)?;
     }
 
-    clear_state(&state_path)?;
-    println!("not running");
-    Ok(1)
+    if stopped {
+        println!("stopped");
+        Ok(0)
+    } else {
+        println!("not running");
+        Ok(1)
+    }
 }
 
 fn run_daemon(
@@ -358,7 +373,7 @@ fn run_daemon(
 ) -> Result<(), String> {
     validate_minutes(minutes)?;
     let mut cycle = parse_cycle(sets, set, work_minutes, break_minutes)?;
-    let state_path = state_path()?;
+    let (state_path, _) = state_paths()?;
     let pid = std::process::id() as i32;
 
     if let Some(fd) = ready_fd {
@@ -495,18 +510,25 @@ fn notify(mode: Mode) {
     }
 }
 
-fn state_path() -> Result<PathBuf, String> {
+fn state_path_for_dir(dir_name: &str) -> Result<PathBuf, String> {
     if let Some(base) = std::env::var_os("XDG_DATA_HOME") {
         if !base.as_os_str().is_empty() {
-            return Ok(PathBuf::from(base).join("pomo").join("state.json"));
+            return Ok(PathBuf::from(base).join(dir_name).join("state.json"));
         }
     }
     let home = std::env::var_os("HOME").ok_or_else(|| "HOME is not set".to_string())?;
     Ok(PathBuf::from(home)
         .join(".local")
         .join("share")
-        .join("pomo")
+        .join(dir_name)
         .join("state.json"))
+}
+
+fn state_paths() -> Result<(PathBuf, PathBuf), String> {
+    Ok((
+        state_path_for_dir(STATE_DIR)?,
+        state_path_for_dir(LEGACY_STATE_DIR)?,
+    ))
 }
 
 fn read_state(path: &Path) -> Result<Option<State>, String> {
