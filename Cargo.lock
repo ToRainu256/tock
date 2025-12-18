@@ -219,7 +219,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "tock"
+name = "tock256"
 version = "0.1.0"
 dependencies = [
  "clap",

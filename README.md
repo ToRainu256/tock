@@ -4,6 +4,12 @@ Ultra-lightweight Pomodoro timer for macOS (CLI-only) with near-zero CPU usage w
 
 ## Install
 
+From crates.io:
+
+```sh
+cargo install tock256
+```
+
 From this directory:
 
 ```sh

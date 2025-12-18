@@ -1,7 +1,19 @@
 [package]
-name = "tock"
+name = "tock256"
 version = "0.1.0"
 edition = "2021"
+description = "Ultra-lightweight Pomodoro timer for macOS (CLI-only) with near-zero CPU usage while running."
+license = "MIT"
+repository = "https://github.com/ToRainu256/tock"
+readme = "README.md"
+authors = ["ToRainu256"]
+keywords = ["pomodoro", "timer", "cli", "macos", "productivity"]
+categories = ["command-line-utilities", "date-and-time"]
+autobins = false
+
+[[bin]]
+name = "tock"
+path = "src/main.rs"
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

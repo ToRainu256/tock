@@ -12,7 +12,7 @@ const DEFAULT_WORK_MINUTES: u64 = 25;
 const DEFAULT_BREAK_MINUTES: u64 = 5;
 const MAX_MINUTES: u64 = 24 * 60;
 const MAX_SETS: u64 = 100;
-const STATE_DIR: &str = env!("CARGO_PKG_NAME");
+const STATE_DIR: &str = "tock";
 const LEGACY_STATE_DIR: &str = "pomo";
 
 #[derive(Parser, Debug)]
